@@ -1,0 +1,273 @@
+---
+title: "joaopedroalqueres_analiseexploratoriadedados_pd"
+author: "João Pedro Alquéres"
+date: "2024-04-10"
+output: pdf_document
+---
+#2.Escolha uma base de dados para realizar esse projeto. Essa base de dados será utilizada durante toda sua análise. Essa base necessita ter 4 (ou mais) variáveis de interesse, onde todas são numéricas (confira com o professor a possibilidade de utilização de dados categóricos). Observe que é importante que haja dados faltantes em pelo menos uma variável para executar esse projeto. Caso você tenha dificuldade para escolher uma base, o professor da disciplina irá designar para você. Explique qual o motivo para a escolha dessa base e aponte os resultados esperados através da análise.
+
+[Base utilizada](https://www.kaggle.com/code/dansbecker/handling-missing-values/input?select=Melbourne_housing_FULL.csv)
+
+Essa foi uma base retirada de um desafio realizado no Kaggle para estimar com algum modelo de ML os valores das casas em Melbourne. Espero encontrar nesses dados resultados que impliquem como se comporta a variável preço com as variáveis explicativas existentes.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r summarystats, results='asis'}
+## 3. Utilizando o pacote summarytools (função descr), descreva estatisticamente a sua base de dados.
+
+# Carregar a biblioteca
+library(summarytools)
+library(readxl) # Para ler arquivos XLSX
+
+# Carregar a base de dados
+caminho <- "C:/Users/Pichau/Desktop/base_kaggle/MELBOURN_HOUSE_PRICES.xlsx"
+dados <- read_excel(caminho)
+
+# Descrever estatisticamente a base de dados
+summarytools::descr(dados)
+
+```
+
+```{r scatter_matrix, echo=FALSE}
+# Carregar bibliotecas
+library(ggplot2)
+library(readxl) # Se ainda não carregou para ler o arquivo XLSX
+
+# Carregar a base de dados
+caminho <- "C:/Users/Pichau/Desktop/base_kaggle/MELBOURN_HOUSE_PRICES.xlsx"
+dados <- read_excel(caminho)
+
+dados$Rooms <- as.numeric(dados$Rooms)
+dados$Propertycount <- as.numeric(dados$Propertycount)
+dados$Distance <- as.numeric(dados$Distance)
+
+
+# Criar gráficos de dispersão para cada variável em relação ao preço
+scatter_rooms <- ggplot(data = dados, aes(x = Rooms, y = Price)) +
+                    geom_point(color = "blue") +
+                    geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "solid") +
+                    scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+                    labs(x = "Número de quartos",
+                         y = "Preço (em milhões)",
+                         title = "Preço em relação ao Número de quartos")
+
+scatter_propertycount <- ggplot(data = dados, aes(x = Propertycount, y = Price)) +
+                            geom_point(color = "green") +
+                            geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "solid") +
+                            scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+                            labs(x = "Propertycount",
+                                 y = "Preço (em milhões)",
+                                 title = "Preço em relação ao Propertycount")
+
+scatter_distance <- ggplot(data = dados, aes(x = Distance, y = Price)) +
+                        geom_point(color = "red") +
+                        geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "solid") +
+                        scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+                        labs(x = "Distância",
+                             y = "Preço (em milhões)",
+                             title = "Preço em relação à Distância")
+
+# Visualizar os gráficos
+print(scatter_rooms)
+print(scatter_propertycount)
+print(scatter_distance)
+
+```
+
+#4.Análise Visual da Correlação entre Variáveis
+
+## Métodos
+Utilizamos gráficos de dispersão com linhas de regressão linear para visualizar a relação entre cada variável e o preço das propriedades.
+
+## Resultados
+Após analisar os gráficos de dispersão, observamos que a variável mais correlacionada com o preço das propriedades é o número de quartos. No gráfico "Preço em relação ao Número de quartos", podemos observar uma  relação linear positiva. Isso sugere que o preço das propriedades tende a aumentar à medida que o número de quartos aumenta.
+
+## Conclusão
+Com base na investigação visual dos gráficos de dispersão, podemos afirmar que o número de quartos é a variável mais correlacionada com o preço das propriedades em Melbourne.
+
+#5.Sobre a normalidade das variáveis:
+
+#a)O que é uma distribuição normal?
+
+Uma distribuição normal, também conhecida como distribuição gaussiana, é uma distribuição de probabilidade contínua que é simétrica em torno da média, com a maioria dos valores se concentrando na média e diminuindo simetricamente em direção às extremidades. Caracteriza-se por uma forma de sino quando representada graficamente.
+
+#b)Histogramas das Variáveis
+
+A seguir, apresentamos histogramas para cada variável da base de dados. O número de bins foi escolhido com base na regra de Scott, que é uma regra de otimização comumente usada para determinar o número ideal de bins em um histograma. Essa regra sugere que o número de bins seja proporcional a \( n^{1/3} \), onde \( n \) é o número de observações na amostra.
+
+```{r histograms, echo=FALSE, message=FALSE, warning=FALSE}
+# Carregar bibliotecas
+library(ggplot2)
+
+# Função para calcular o número de bins usando a regra de Scott, ignorando valores ausentes
+calc_num_bins_ignore_na <- function(data) {
+  num_bins <- ceiling((max(data, na.rm = TRUE) - min(data, na.rm = TRUE)) / (3.5 * IQR(data, na.rm = TRUE) / length(data)^(1/3)))
+  return(num_bins)
+}
+
+# Função para calcular o número de bins usando a regra de Scott, considerando apenas valores positivos
+calc_num_bins_positive <- function(data) {
+  max_positive <- max(data[data >= 0])  # Encontrar o valor máximo positivo
+  num_bins <- ceiling((max_positive - min(data)) / (3.5 * IQR(data) / length(data)^(1/3)))
+  return(num_bins)
+}
+
+# Histograma para a variável "Rooms"
+histogram_rooms <- ggplot(dados, aes(x = Rooms)) +
+                    geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+                    labs(title = "Número de Quartos", x = "Número de Quartos", y = "Frequência")
+
+# Histograma para a variável "Price"
+histogram_price <- ggplot(dados, aes(x = Price)) +
+                    geom_histogram(binwidth = calc_num_bins_ignore_na(dados$Price), fill = "green", color = "black") +
+                    labs(title = "Preço", x = "Preço (em dólares)", y = "Frequência")
+
+# Histograma para a variável "Propertycount"
+histogram_propertycount <- ggplot(dados, aes(x = Propertycount)) +
+                            geom_histogram(binwidth = calc_num_bins_ignore_na(dados$Propertycount), fill = "orange", color = "black") +
+                            labs(title = "Contagem de Propriedades", x = "Contagem de Propriedades", y = "Frequência")
+
+# Histograma para a variável "Distância"
+binwidth_distance <- 1  # Definir o binwidth de acordo com a granularidade desejada
+num_bins_distance <- calc_num_bins_positive(dados$Distance)  # Calcular o número de bins
+
+histogram_distance <- ggplot(dados, aes(x = Distance)) +
+                        geom_histogram(binwidth = binwidth_distance, bins = num_bins_distance, fill = "red", color = "black") +
+                        labs(title = "Distância", x = "Distância (em quilômetros)", y = "Frequência")
+
+# Visualizar os histogramas
+print(histogram_rooms)
+print(histogram_price)
+print(histogram_propertycount)
+print(histogram_distance)
+
+```
+
+#5.c)Crie um gráfico Q-Q para cada variável de sua base de dados. (use as funções presentes no pacote ggpubr);
+
+```{r qq_plots, echo=FALSE, message=FALSE, warning=FALSE}
+library(ggpubr)
+
+# Gráfico Q-Q para a variável "Rooms"
+qq_plot_rooms <- ggqqplot(dados$Rooms, main = "Q-Q Plot - Número de Quartos")
+
+# Gráfico Q-Q para a variável "Price"
+qq_plot_price <- ggqqplot(dados$Price, main = "Q-Q Plot - Preço")
+
+# Gráfico Q-Q para a variável "Propertycount"
+qq_plot_propertycount <- ggqqplot(dados$Propertycount, main = "Q-Q Plot - Contagem de Propriedades")
+
+# Gráfico Q-Q para a variável "Distance"
+qq_plot_distance <- ggqqplot(dados$Distance, main = "Q-Q Plot - Distância")
+
+# Visualizar os gráficos Q-Q
+print(qq_plot_rooms)
+print(qq_plot_price)
+print(qq_plot_propertycount)
+print(qq_plot_distance)
+
+```
+
+#5.d)Execute um teste de normalidade Shapiro-Wilk;
+
+```{r normality, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Função para realizar o teste de normalidade Shapiro-Wilk para uma variável
+perform_shapiro_test <- function(variable, subset_size) {
+  # Selecionar as primeiras 'subset_size' linhas da variável
+  variable_subset <- head(variable, subset_size)
+  
+  # Teste de normalidade Shapiro-Wilk para o subconjunto da variável
+  shapiro_result <- shapiro.test(variable_subset)
+  
+  return(shapiro_result)
+}
+
+# Definir o tamanho do subconjunto para o teste de normalidade
+subset_size <- 5000
+
+# Realizar o teste de normalidade para cada variável
+shapiro_rooms <- perform_shapiro_test(dados$Rooms, subset_size)
+shapiro_price <- perform_shapiro_test(dados$Price, subset_size)
+shapiro_propertycount <- perform_shapiro_test(dados$Propertycount, subset_size)
+shapiro_distance <- perform_shapiro_test(dados$Distance, subset_size)
+
+# Exibir os resultados
+shapiro_rooms
+shapiro_price
+shapiro_propertycount
+shapiro_distance
+
+
+```
+
+#5.e)Execute um teste de normalidade Shapiro-Wilk;
+
+Com base nos resultados do teste de normalidade, que para realizacao de tal teve a amostra reduzida para 50.000 observações, rejeitamos a hipótese nula de normalidade.
+Também, com o auxílio das ferramentas gráficas, rejeitamos visualmente que as variáveis se comportam como uma normal.
+
+#6.Qualidade de dados tem sido um dos temas mais abordados nos projetos de estruturação em data analytics, sendo um dos principais indicadores do nível de maturidade das organizações. Um dos problemas mais comuns de qualidade é relacionado à completude de dados. Em suas palavras, como é definido completude? Qual o impacto em uma análise exploratória de dados?
+
+A completude de dados é definida pela presença ou ausência de valores em um conjunto de dados. Quando os dados estão completos, todas as informações necessárias para a análise estão disponíveis, enquanto a incompletude ocorre quando há valores ausentes. Isso pode afetar significativamente uma análise exploratória de dados, resultando em viés, perda de informações e redução da precisão dos resultados. Portanto, lidar com a completude dos dados é essencial para garantir a qualidade e confiabilidade da análise.
+
+#7.Qual a completude para cada uma das variáveis do seu banco de dados?
+
+```{r completude, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Função para calcular a completude de uma variável
+calculate_completeness <- function(variable) {
+  completeness <- sum(!is.na(variable)) / length(variable) * 100
+  return(completeness)
+}
+
+# Calcular a completude para cada variável
+completeness_rooms <- calculate_completeness(dados$Rooms)
+completeness_price <- calculate_completeness(dados$Price)
+completeness_propertycount <- calculate_completeness(dados$Propertycount)
+completeness_distance <- calculate_completeness(dados$Distance)
+
+# Gerar os textos correspondentes
+text_rooms <- paste("A completude da variável 'Rooms' é", round(completeness_rooms, 2), "%")
+text_price <- paste("A completude da variável 'Price' é", round(completeness_price, 2), "%")
+text_propertycount <- paste("A completude da variável 'Propertycount' é", round(completeness_propertycount, 2), "%")
+text_distance <- paste("A completude da variável 'Distance' é", round(completeness_distance, 2), "%")
+
+# Exibir os textos
+cat(text_rooms, "\n")
+cat(text_price, "\n")
+cat(text_propertycount, "\n")
+cat(text_distance, "\n")
+
+
+```
+
+#9.Realize uma operação de imputação de dados usando o pacote MICE.
+
+```{r mice, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+
+# Carregar o pacote mice
+library(mice)
+
+# Crie um objeto de imputação usando a função mice()
+inputed_data <- mice(dados, method = "rf")
+
+# Obter o número de colunas na matriz de dados
+num_cols <- ncol(dados)
+
+# Criar uma matriz de preditores com todas as variáveis como preditoras, exceto 'Price'
+predictor_matrix <- matrix(0, nrow = num_cols, ncol = num_cols)
+colnames(predictor_matrix) <- rownames(predictor_matrix) <- colnames(dados)
+predictor_matrix["Price", ] <- 1
+
+# Definir o objeto de imputação com a matriz de preditores
+inputed_data <- mice(dados, method = "rf", predictorMatrix = predictor_matrix)
+
+# Execute a imputação
+inputed_data <- complete(inputed_data)
+
+
+```
